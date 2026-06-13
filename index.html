@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPA Transcriber</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .container {
+            background-color: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .results {
+            margin-top: 24px;
+        }
+        .result-card {
+            background-color: #ecf0f1;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            word-wrap: break-word;
+        }
+        .ipa-display {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 16px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>IPA Transcriber</h1>
+    
+    <div class="container">
+        <div class="form-group">
+            <label for="ipaInput">IPA Text (e.g., /ˈka.za/ or /kæt/)</label>
+            <input type="text" id="ipaInput" placeholder="Enter IPA symbols...">
+        </div>
+        
+        <div class="form-group">
+            <label for="langSelect">Target Language</label>
+            <select id="langSelect">
+                <option value="pt-BR">Português Brasileiro</option>
+                <option value="en-US">American English</option>
+            </select>
+        </div>
+        
+        <button onclick="transcribe()">Transcribe</button>
+        
+        <div class="results" id="resultsArea">
+            <!-- Results will be injected here -->
+        </div>
+    </div>
+
+    <script>
+        // Phoneme mappings including fallbacks for non-native sounds
+        const mappings = {
+            "pt-BR": {
+                // Vowels (with and without stress marks for accentuation)
+                "a": ["A"], "ˈa": ["Á", "A"],
+                "ɛ": ["E"], "ˈɛ": ["É"],
+                "e": ["E"], "ˈe": ["Ê", "E"],
+                "i": ["I"], "ˈi": ["Í", "I"],
+                "ɔ": ["O"], "ˈɔ": ["Ó"],
+                "o": ["O"], "ˈo": ["Ô", "O"],
+                "u": ["U"], "ˈu": ["Ú", "U"],
+                "ə": ["A", "E"], "ʌ": ["A"], "æ": ["E", "A"], // Fallbacks
+                
+                // Consonants
+                "p": ["P"], "b": ["B"], "t": ["T"], "d": ["D"],
+                "k": ["C", "K", "QU"], 
+                "g": ["G", "GU"],
+                "f": ["F"], "v": ["V"],
+                "s": ["S", "SS", "C", "Ç", "X"],
+                "z": ["Z", "S", "X"],
+                "ʃ": ["CH", "X"], "ʒ": ["J", "G"],
+                "m": ["M"], "n": ["N"], "ɲ": ["NH"], "ŋ": ["N"], // ŋ is fallback
+                "l": ["L"], "ʎ": ["LH"],
+                "ɾ": ["R"], "ʁ": ["R", "RR"], "h": ["R", "H"], // h is fallback
+                "w": ["U"], "j": ["I"],
+                "θ": ["S", "T"], "ð": ["D", "Z"], // Fallbacks for English TH
+                "ɹ": ["R"], "tʃ": ["TCH", "CH"], "dʒ": ["DJ", "DI"]
+            },
+            "en-US": {
+                // Vowels
+                "i": ["EE", "EA", "Y", "E"], "ɪ": ["I"],
+                "eɪ": ["A", "AY", "A_E"], "ɛ": ["E", "EA"],
+                "æ": ["A"], "ɑ": ["O", "A"], "ɔ": ["AW", "AU", "O"],
+                "oʊ": ["O", "OA", "O_E"], "ʊ": ["U", "OO"],
+                "u": ["OO", "U", "U_E"], "ʌ": ["U", "O"],
+                "ə": ["A", "E", "O", "U"],
+                "a": ["A"], "e": ["E"], "o": ["O"], // Fallbacks
+                
+                // Consonants
+                "p": ["P"], "b": ["B"], "t": ["T"], "d": ["D"],
+                "k": ["C", "K", "CK", "CH"], "g": ["G"],
+                "f": ["F", "PH"], "v": ["V"],
+                "θ": ["TH"], "ð": ["TH"],
+                "s": ["S", "C"], "z": ["Z", "S"],
+                "ʃ": ["SH", "TI", "CI"], "ʒ": ["S", "GE"],
+                "h": ["H"], "tʃ": ["CH", "TCH"], "dʒ": ["J", "G", "DGE"],
+                "m": ["M"], "n": ["N"], "ŋ": ["NG"],
+                "l": ["L"], "ɹ": ["R"], "ɾ": ["T", "D"], // Flap T fallback
+                "j": ["Y"], "w": ["W"],
+                "ɲ": ["NY"], "ʎ": ["LY"], "ʁ": ["H", "R"] // PT fallbacks
+            }
+        };
+
+        // Helper to parse IPA string into an array of phoneme tokens
+        function tokenizeIPA(ipa) {
+            // Clean input: remove slashes and dots (syllable boundaries)
+            let cleanIpa = ipa.replace(/[\/\.]/g, '').trim();
+            let tokens = [];
+            let i = 0;
+            
+            while (i < cleanIpa.length) {
+                let tokenFound = false;
+                
+                // Check for 2-character tokens (like tʃ, dʒ, eɪ, or stressed vowels like ˈa)
+                if (i + 1 < cleanIpa.length) {
+                    let twoChar = cleanIpa.substring(i, i + 2);
+                    // If the map has the 2-char combination (e.g., in mappings for either language)
+                    if (mappings["pt-BR"][twoChar] || mappings["en-US"][twoChar]) {
+                        tokens.push(twoChar);
+                        i += 2;
+                        tokenFound = true;
+                        continue;
+                    }
+                }
+                
+                // If no 2-char token found, take 1 character
+                if (!tokenFound) {
+                    tokens.push(cleanIpa[i]);
+                    i++;
+                }
+            }
+            return tokens;
+        }
+
+        // Generate all possible combinations from an array of arrays
+        function getCombinations(arrays) {
+            if (arrays.length === 0) return [[]];
+            let result = [];
+            let rest = getCombinations(arrays.slice(1));
+            for (let value of arrays[0]) {
+                for (let r of rest) {
+                    result.push([value, ...r]);
+                }
+            }
+            return result;
+        }
+
+        // Post-processing filter to remove linguistically impossible combinations in Portuguese
+        function filterPtBrCombinations(word) {
+            // Basic rules to eliminate obvious incorrect orthographies
+            if (word.includes("QU") && (word.includes("QUA") || word.includes("QUO") || word.includes("QUU"))) {
+                // QU is usually before E or I to make /k/, before A/O makes /kw/
+                // (Simplified filter to reduce junk outputs)
+            }
+            if (word.includes("CE") || word.includes("CI")) {
+                // If it was meant to be /k/ mapped to C, it shouldn't be before E or I
+            }
+            // For the sake of showing options as requested, we return the word,
+            // but you could add strict RegEx filters here.
+            return word.replace(/_E/g, 'E'); // Clean up english split digraphs if mixed
+        }
+
+        function transcribe() {
+            const inputField = document.getElementById('ipaInput').value;
+            const lang = document.getElementById('langSelect').value;
+            const resultsArea = document.getElementById('resultsArea');
+            
+            resultsArea.innerHTML = ''; // Clear previous results
+
+            if (!inputField) return;
+
+            // Display formatted IPA text
+            const cleanInputText = inputField.replace(/\//g, '');
+            const ipaDisplay = document.createElement('div');
+            ipaDisplay.className = 'ipa-display';
+            ipaDisplay.textContent = `/${cleanInputText}/`;
+            resultsArea.appendChild(ipaDisplay);
+
+            const tokens = tokenizeIPA(cleanInputText);
+            const currentMap = mappings[lang];
+            let possibleGraphemes = [];
+
+            // Map each phoneme to its possible letters
+            for (let token of tokens) {
+                if (currentMap[token]) {
+                    possibleGraphemes.push(currentMap[token]);
+                } else {
+                    // Fallback to literal uppercase character if no map found
+                    possibleGraphemes.push([token.toUpperCase()]);
+                }
+            }
+
+            // Generate cartesian product
+            let combinations = getCombinations(possibleGraphemes);
+            
+            // Join letters, apply filters and ensure UPPERCASE
+            let finalWords = new Set();
+            for (let combo of combinations) {
+                let rawWord = combo.join('').toUpperCase();
+                
+                if (lang === 'pt-BR') {
+                    rawWord = filterPtBrCombinations(rawWord);
+                } else {
+                    rawWord = rawWord.replace(/_E/g, 'E'); // Handle English A_E pattern simply
+                }
+                
+                finalWords.add(rawWord);
+            }
+
+            // Render results
+            if (finalWords.size === 0) {
+                resultsArea.innerHTML += '<p>Nenhuma transcrição encontrada.</p>';
+            } else {
+                finalWords.forEach(word => {
+                    let card = document.createElement('div');
+                    card.className = 'result-card';
+                    card.textContent = word;
+                    resultsArea.appendChild(card);
+                });
+            }
+        }
+    </script>
+
+</body>
+</html>
